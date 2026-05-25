@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Market Morning Briefing</title>
+  <style>
+    :root {
+      --ink: #18202f;
+      --muted: #657184;
+      --line: #d7dde6;
+      --panel: #ffffff;
+      --page: #f4f7fb;
+      --navy: #16324f;
+      --teal: #0f766e;
+      --gold: #a16207;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: var(--page);
+    }
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 22px 32px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    header p {
+      margin: 6px 0 0;
+      color: #dbe7f3;
+      font-size: 14px;
+    }
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    nav a {
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 6px;
+      padding: 8px 10px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 26px 24px 42px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p, li {
+      color: #334155;
+      line-height: 1.55;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    input, textarea {
+      width: 100%;
+      border: 1px solid #c8d1dd;
+      border-radius: 6px;
+      padding: 10px 11px;
+      color: var(--ink);
+      background: #fff;
+      font: inherit;
+      font-weight: 400;
+    }
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    button {
+      min-height: 42px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 0 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .primary { background: var(--teal); color: #fff; }
+    .secondary { background: #fff; color: var(--navy); border-color: var(--line); }
+    .notice {
+      border-left: 4px solid var(--gold);
+      background: #fffbeb;
+      padding: 12px 14px;
+      border-radius: 6px;
+      color: #713f12;
+    }
+    .preview {
+      white-space: pre-wrap;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 120px;
+    }
+    code {
+      background: #eef2f7;
+      border: 1px solid #d7dde6;
+      border-radius: 5px;
+      padding: 2px 5px;
+    }
+    @media (max-width: 760px) {
+      header { padding: 20px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      main { padding: 20px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>Market Morning Briefing</h1>
+        <p>A static setup page for the scheduled Resend market briefing.</p>
+      </div>
+      <nav aria-label="Primary">
+        <a href="./index.html">Dashboard</a>
+        <a href="./instructions.html">Setup</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section>
+      <h2>Briefing Settings</h2>
+      <p class="notice">This static page does not send email directly. Scheduling runs in a Render Cron Job using private environment variables.</p>
+      <div class="grid">
+        <label>Recipient email
+          <input id="recipient" type="email" value="xin.chen.29@gmail.com">
+        </label>
+        <label>Send time
+          <input id="sendTime" type="time" value="08:00">
+        </label>
+        <label>Timezone label
+          <input id="timezone" value="America/New_York">
+        </label>
+        <label>Headline count
+          <input id="headlineCount" type="number" min="1" max="25" value="8">
+        </label>
+      </div>
+      <label style="margin-top:16px">Symbols
+        <textarea id="symbols">^GSPC, ^IXIC, ^DJI, ^VIX, ES=F, NQ=F, CL=F, GC=F, EURUSD=X, BTC-USD</textarea>
+      </label>
+      <div class="actions">
+        <button class="primary" id="saveButton" type="button">Save On This Browser</button>
+        <button class="secondary" id="previewButton" type="button">Preview Settings</button>
+      </div>
+    </section>
+    <section>
+      <h2>Render Cron Environment Values</h2>
+      <div id="preview" class="preview">Click Preview Settings to generate the values to copy into Render Cron Job.</div>
+    </section>
+  </main>
+  <script>
+    const fields = ['recipient', 'sendTime', 'timezone', 'headlineCount', 'symbols'];
+    const preview = document.getElementById('preview');
+
+    function value(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    function loadSaved() {
+      const saved = JSON.parse(localStorage.getItem('marketBriefingSettings') || '{}');
+      fields.forEach((id) => {
+        if (saved[id]) document.getElementById(id).value = saved[id];
+      });
+    }
+
+    function currentSettings() {
+      return Object.fromEntries(fields.map((id) => [id, value(id)]));
+    }
+
+    function renderPreview() {
+      const settings = currentSettings();
+      preview.textContent = [
+        'BRIEFING_RECIPIENT_EMAIL=' + settings.recipient,
+        'BRIEFING_SYMBOLS=' + settings.symbols,
+        'BRIEFING_HEADLINE_COUNT=' + settings.headlineCount,
+        'BRIEFING_TIMEZONE_LABEL=' + settings.timezone,
+        'BRIEFING_SUBJECT_PREFIX=Market Morning Briefing',
+        '',
+        'Cron schedule in Render:',
+        settings.sendTime + ' ' + settings.timezone
+      ].join('\\n');
+    }
+
+    document.getElementById('saveButton').addEventListener('click', () => {
+      localStorage.setItem('marketBriefingSettings', JSON.stringify(currentSettings()));
+      preview.textContent = 'Saved on this browser. Use Preview Settings to copy Render Cron values.';
+    });
+
+    document.getElementById('previewButton').addEventListener('click', renderPreview);
+    loadSaved();
+  </script>
+</body>
+</html>

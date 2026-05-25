@@ -3,25 +3,27 @@
 This tool sends a daily finance market briefing email at a configured local time.
 It uses delayed Yahoo Finance quote data and Yahoo Finance RSS headlines.
 
-## Website
+## Static Website
 
-Run the local website:
-
-```powershell
-python .\market_briefing_web.py
-```
-
-Then open:
+The public website can be hosted as a Render Static Site so it does not spin
+down. Use:
 
 ```text
-http://127.0.0.1:8080
+Publish directory: public
+Build command: leave blank
 ```
 
-The website lets you edit settings, preview the briefing, send a test email,
-and start or stop the in-process daily scheduler.
+The static website is for setup and configuration guidance. It does not send
+email directly because a static site cannot safely store the Resend API key.
 
-The dashboard uses Resend for email delivery, so users only need a recipient
-email, send time, symbols, and headline count.
+## Scheduled Email
+
+Use a Render Cron Job for scheduled sending. Cron jobs do not depend on the
+static website staying awake.
+
+```text
+Command: python cron_send_briefing.py
+```
 
 ## Resend Email Sending
 
@@ -35,13 +37,14 @@ RESEND_API_KEY=re_your_api_key
 RESEND_FROM_EMAIL=Market Briefing <briefing@yourdomain.com>
 ```
 
-With those set, users only need to enter their recipient email, send time, and
-symbols.
-
-For email setup instructions, open:
+Also set:
 
 ```text
-http://127.0.0.1:8080/instructions
+BRIEFING_RECIPIENT_EMAIL=xin.chen.29@gmail.com
+BRIEFING_SYMBOLS=^GSPC,^IXIC,^DJI,^VIX,ES=F,NQ=F,CL=F,GC=F,EURUSD=X,BTC-USD
+BRIEFING_HEADLINE_COUNT=8
+BRIEFING_TIMEZONE_LABEL=America/New_York
+BRIEFING_SUBJECT_PREFIX=Market Morning Briefing
 ```
 
 ## Setup

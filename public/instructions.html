@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Static + Cron Setup</title>
+  <style>
+    :root {
+      --ink: #18202f;
+      --line: #d7dde6;
+      --panel: #ffffff;
+      --page: #f4f7fb;
+      --navy: #16324f;
+      --teal: #0f766e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: var(--page);
+    }
+    header {
+      background: var(--navy);
+      color: #fff;
+      padding: 22px 32px;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+    }
+    h1 { margin: 0; font-size: 24px; letter-spacing: 0; }
+    header p { margin: 6px 0 0; color: #dbe7f3; font-size: 14px; }
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    nav a {
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 6px;
+      padding: 8px 10px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 26px 24px 42px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin-bottom: 18px;
+    }
+    h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: 0; }
+    p, li { color: #334155; line-height: 1.55; }
+    code {
+      background: #eef2f7;
+      border: 1px solid #d7dde6;
+      border-radius: 5px;
+      padding: 2px 5px;
+    }
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .callout {
+      border-left: 4px solid var(--teal);
+      background: #ecfdf5;
+      padding: 12px 14px;
+      border-radius: 6px;
+      color: #134e4a;
+    }
+    @media (max-width: 720px) {
+      header { padding: 20px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      main { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>Static + Cron Setup</h1>
+        <p>The website stays static; Render Cron handles scheduled email.</p>
+      </div>
+      <nav aria-label="Primary">
+        <a href="./index.html">Dashboard</a>
+        <a href="./instructions.html">Setup</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section>
+      <h2>Why Two Render Services?</h2>
+      <p>A static website does not sleep, but it cannot safely hold a Resend API key or run a daily scheduler. The scheduled email must run in a private Render Cron Job.</p>
+      <p class="callout">Static site = always available public page. Cron Job = private scheduled sender.</p>
+    </section>
+    <section>
+      <h2>Static Site Settings</h2>
+      <ol>
+        <li>Create a new Render <strong>Static Site</strong>.</li>
+        <li>Use the same GitHub repo.</li>
+        <li>Set Build Command to blank.</li>
+        <li>Set Publish Directory to <code>public</code>.</li>
+        <li>Deploy.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>Cron Job Settings</h2>
+      <ol>
+        <li>Create a new Render <strong>Cron Job</strong>.</li>
+        <li>Use the same GitHub repo.</li>
+        <li>Use this command:</li>
+      </ol>
+      <pre><code>python cron_send_briefing.py</code></pre>
+      <p>Add these environment variables to the Cron Job:</p>
+      <pre><code>RESEND_API_KEY=re_your_key
+RESEND_FROM_EMAIL=Market Briefing &lt;onboarding@resend.dev&gt;
+BRIEFING_RECIPIENT_EMAIL=xin.chen.29@gmail.com
+BRIEFING_SYMBOLS=^GSPC,^IXIC,^DJI,^VIX,ES=F,NQ=F,CL=F,GC=F,EURUSD=X,BTC-USD
+BRIEFING_HEADLINE_COUNT=8
+BRIEFING_TIMEZONE_LABEL=America/New_York
+BRIEFING_SUBJECT_PREFIX=Market Morning Briefing</code></pre>
+    </section>
+    <section>
+      <h2>Schedule</h2>
+      <p>Set the Cron Job schedule to the morning time you want. Render Cron schedules are configured in Render, not in the static website.</p>
+      <p>For example, for 8:00 AM Eastern, choose a daily schedule for 8:00 AM in Render if it offers timezone selection. If it asks for UTC, use 12:00 UTC during EDT or 13:00 UTC during EST.</p>
+    </section>
+  </main>
+</body>
+</html>
