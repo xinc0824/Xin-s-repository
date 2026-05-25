@@ -3,49 +3,53 @@
 This tool sends a daily finance market briefing email at a configured local time.
 It uses delayed Yahoo Finance quote data and Yahoo Finance RSS headlines.
 
-## Static Website
+## Recommended Setup: Render Web Service + UptimeRobot
 
-The public website can be hosted as a Render Static Site so it does not spin
-down. Use:
-
-```text
-Publish directory: public
-Build command: leave blank
-```
-
-The static website is for setup and configuration guidance. It does not send
-email directly because a static site cannot safely store the Resend API key.
-
-## Scheduled Email
-
-Use a Render Cron Job for scheduled sending. Cron jobs do not depend on the
-static website staying awake.
+Use the Python web service when you want users to type the recipient email,
+send time, and symbols in the form.
 
 ```text
-Command: python cron_send_briefing.py
+Build Command: pip install -r requirements.txt
+Start Command: python market_briefing_web.py --host 0.0.0.0 --port $PORT
 ```
+
+Set these environment variables on Render:
+
+```text
+RESEND_API_KEY=re_your_api_key
+RESEND_FROM_EMAIL=Market Briefing <onboarding@resend.dev>
+```
+
+Then use UptimeRobot to ping your Render URL every 5 minutes so the free web
+service stays awake more reliably.
+
+## UptimeRobot Setup
+
+1. Create a free account at `https://uptimerobot.com`.
+2. Click `New Monitor`.
+3. Choose `HTTP(s)`.
+4. Friendly Name: `Market Morning Briefing`.
+5. URL: your Render web service URL.
+6. Monitoring Interval: `5 minutes`.
+7. Click `Create Monitor`.
 
 ## Resend Email Sending
 
-For the simplest public setup, use Resend instead of asking every user to enter
-SMTP settings.
-
-Set these environment variables on Render:
+The web service sends email through Resend instead of asking users to enter SMTP
+settings.
 
 ```text
 RESEND_API_KEY=re_your_api_key
 RESEND_FROM_EMAIL=Market Briefing <briefing@yourdomain.com>
 ```
 
-Also set:
+For testing without a custom domain, use `Market Briefing <onboarding@resend.dev>`
+and send only to the email verified in your Resend account.
 
-```text
-BRIEFING_RECIPIENT_EMAIL=xin.chen.29@gmail.com
-BRIEFING_SYMBOLS=^GSPC,^IXIC,^DJI,^VIX,ES=F,NQ=F,CL=F,GC=F,EURUSD=X,BTC-USD
-BRIEFING_HEADLINE_COUNT=8
-BRIEFING_TIMEZONE_LABEL=America/New_York
-BRIEFING_SUBJECT_PREFIX=Market Morning Briefing
-```
+## Static Site Alternative
+
+The `public/` folder contains a static setup page, but the static-only option
+cannot save form recipients for scheduling without adding a database/API.
 
 ## Setup
 
