@@ -14,6 +14,7 @@ import datetime as dt
 import email.message
 import html
 import json
+import os
 import smtplib
 import ssl
 import sys
@@ -29,6 +30,7 @@ from typing import Iterable
 DEFAULT_CONFIG = Path(__file__).with_name("market_briefing.ini")
 YAHOO_QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
 YAHOO_NEWS_RSS = "https://finance.yahoo.com/news/rssindex"
+RESEND_EMAIL_URL = "https://api.resend.com/emails"
 
 
 @dataclass(frozen=True)
@@ -85,18 +87,20 @@ def read_config(path: Path) -> tuple[EmailSettings, BriefingSettings]:
         subject_prefix=briefing_cfg.get("subject_prefix", "Market Morning Briefing").strip(),
     )
 
-    missing = [
-        name
-        for name, value in {
-            "smtp_host": email_settings.smtp_host,
-            "username": email_settings.username,
-            "password": email_settings.password,
-            "sender": email_settings.sender,
-            "recipient": email_settings.recipient,
-            "symbols": ",".join(briefing_settings.symbols),
-        }.items()
-        if not value
-    ]
+    required = {
+        "recipient": email_settings.recipient,
+        "symbols": ",".join(briefing_settings.symbols),
+    }
+    if not os.environ.get("RESEND_API_KEY"):
+        required.update(
+            {
+                "smtp_host": email_settings.smtp_host,
+                "username": email_settings.username,
+                "password": email_settings.password,
+                "sender": email_settings.sender,
+            }
+        )
+    missing = [name for name, value in required.items() if not value]
     if missing:
         raise ValueError(f"Missing required config value(s): {', '.join(missing)}")
 
@@ -282,6 +286,11 @@ def build_briefing(settings: BriefingSettings) -> tuple[str, str, str]:
 
 
 def send_email(settings: EmailSettings, subject: str, body_text: str, body_html: str) -> None:
+    resend_api_key = os.environ.get("RESEND_API_KEY", "").strip()
+    if resend_api_key:
+        send_resend_email(settings, subject, body_text, body_html, resend_api_key)
+        return
+
     message = email.message.EmailMessage()
     message["Subject"] = subject
     message["From"] = settings.sender
@@ -295,6 +304,42 @@ def send_email(settings: EmailSettings, subject: str, body_text: str, body_html:
             server.starttls(context=context)
         server.login(settings.username, settings.password)
         server.send_message(message)
+
+
+def send_resend_email(
+    settings: EmailSettings,
+    subject: str,
+    body_text: str,
+    body_html: str,
+    api_key: str,
+) -> None:
+    sender = os.environ.get("RESEND_FROM_EMAIL", "").strip() or settings.sender
+    if not sender:
+        raise ValueError("Set RESEND_FROM_EMAIL on Render, such as Briefing <briefing@yourdomain.com>.")
+
+    payload = {
+        "from": sender,
+        "to": [settings.recipient],
+        "subject": subject,
+        "html": body_html,
+        "text": body_text,
+    }
+    request = urllib.request.Request(
+        RESEND_EMAIL_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            if response.status >= 300:
+                raise RuntimeError(f"Resend returned HTTP {response.status}")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Resend send failed: HTTP {exc.code} {detail}") from exc
 
 
 def run_once(config_path: Path, dry_run: bool) -> None:

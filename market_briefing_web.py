@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import html
+import os
 import threading
 import time
 import urllib.parse
@@ -40,13 +41,14 @@ def default_settings() -> tuple[EmailSettings, BriefingSettings]:
     try:
         return read_config(DEFAULT_CONFIG)
     except Exception:
+        from_email = os.environ.get("RESEND_FROM_EMAIL", "")
         return (
             EmailSettings(
                 smtp_host="smtp.gmail.com",
                 smtp_port=587,
                 username="",
                 password="",
-                sender="",
+                sender=from_email,
                 recipient="",
                 use_tls=True,
             ),
@@ -76,12 +78,14 @@ def settings_from_form(form: dict[str, list[str]]) -> tuple[EmailSettings, Brief
         return form.get(name, [fallback])[0].strip()
 
     symbols = [symbol.strip().upper() for symbol in field("symbols").split(",") if symbol.strip()]
+    username = field("username")
+    sender = field("sender") or username
     email_settings = EmailSettings(
         smtp_host=field("smtp_host"),
         smtp_port=int(field("smtp_port", "587")),
-        username=field("username"),
+        username=username,
         password=field("password"),
-        sender=field("sender"),
+        sender=sender,
         recipient=field("recipient"),
         use_tls=field("use_tls", "off") == "on",
     )
@@ -307,6 +311,28 @@ def page_html(
       width: 18px;
       height: 18px;
     }}
+    .provider {{
+      margin: 0 0 14px;
+      color: #334155;
+      line-height: 1.45;
+    }}
+    details {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 0;
+      margin-top: 16px;
+    }}
+    summary {{
+      cursor: pointer;
+      padding: 14px 16px;
+      color: var(--navy);
+      font-weight: 700;
+    }}
+    .advanced-body {{
+      border-top: 1px solid var(--line);
+      padding: 16px;
+    }}
     .actions {{
       position: sticky;
       bottom: 0;
@@ -389,29 +415,37 @@ def page_html(
       <form method="post">
         <section>
           <h2>Email Delivery</h2>
+          <p class="provider">Simple mode uses Resend when <strong>RESEND_API_KEY</strong> is set on the server. Users only need a recipient email.</p>
           <div class="grid">
-            <label>SMTP host
-              <input name="smtp_host" value="{html.escape(email_settings.smtp_host)}" required>
-            </label>
-            <label>SMTP port
-              <input name="smtp_port" type="number" min="1" max="65535" value="{email_settings.smtp_port}" required>
-            </label>
-            <label>Username
-              <input name="username" value="{html.escape(email_settings.username)}" required>
-            </label>
-            <label>Password or app password
-              <input name="password" type="password" value="{html.escape(email_settings.password)}" required>
-            </label>
-            <label>Sender
-              <input name="sender" type="email" value="{html.escape(email_settings.sender)}" required>
-            </label>
-            <label>Recipient
+            <label>Recipient email
               <input name="recipient" type="email" value="{html.escape(email_settings.recipient)}" required>
             </label>
-            <label class="check">
-              <input name="use_tls" type="checkbox" {checked}> Use TLS
-            </label>
           </div>
+          <details>
+            <summary>Advanced email settings for SMTP fallback</summary>
+            <div class="advanced-body">
+              <div class="grid">
+                <label>SMTP username
+                  <input name="username" type="email" value="{html.escape(email_settings.username)}">
+                </label>
+                <label>SMTP password or app password
+                  <input name="password" type="password" value="{html.escape(email_settings.password)}">
+                </label>
+                <label>SMTP host
+                  <input name="smtp_host" value="{html.escape(email_settings.smtp_host)}" required>
+                </label>
+                <label>SMTP port
+                  <input name="smtp_port" type="number" min="1" max="65535" value="{email_settings.smtp_port}" required>
+                </label>
+                <label>Sender shown on email
+                  <input name="sender" type="email" value="{html.escape(email_settings.sender)}">
+                </label>
+                <label class="check">
+                  <input name="use_tls" type="checkbox" {checked}> Use TLS
+                </label>
+              </div>
+            </div>
+          </details>
         </section>
         <section>
           <h2>Briefing</h2>
