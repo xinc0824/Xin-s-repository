@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import datetime as dt
 import html
 import os
@@ -35,49 +36,66 @@ SERVER_STATE = {
 }
 SCHEDULER_STOP = threading.Event()
 SCHEDULER_THREAD: threading.Thread | None = None
+DEFAULT_SYMBOLS = [
+    "^GSPC",
+    "^IXIC",
+    "^DJI",
+    "^VIX",
+    "ES=F",
+    "NQ=F",
+    "CL=F",
+    "GC=F",
+    "EURUSD=X",
+    "BTC-USD",
+]
+
+
+def fixed_briefing_settings() -> BriefingSettings:
+    symbols = [
+        symbol.strip().upper()
+        for symbol in os.environ.get("BRIEFING_SYMBOLS", ",".join(DEFAULT_SYMBOLS)).split(",")
+        if symbol.strip()
+    ]
+    return BriefingSettings(
+        send_time=os.environ.get("BRIEFING_SEND_TIME", "08:00").strip(),
+        timezone_label=os.environ.get("BRIEFING_TIMEZONE_LABEL", "America/New_York").strip(),
+        symbols=symbols,
+        headline_count=int(os.environ.get("BRIEFING_HEADLINE_COUNT", "8")),
+        subject_prefix=os.environ.get("BRIEFING_SUBJECT_PREFIX", "Market Morning Briefing").strip(),
+    )
+
+
+def saved_recipient() -> str:
+    parser = configparser.ConfigParser()
+    if not DEFAULT_CONFIG.exists():
+        return ""
+    parser.read(DEFAULT_CONFIG, encoding="utf-8")
+    return parser.get("email", "recipient", fallback="").strip()
+
+
+def resend_ready() -> bool:
+    return bool(os.environ.get("RESEND_API_KEY", "").strip() and os.environ.get("RESEND_FROM_EMAIL", "").strip())
 
 
 def default_settings() -> tuple[EmailSettings, BriefingSettings]:
-    try:
-        return read_config(DEFAULT_CONFIG)
-    except Exception:
-        from_email = os.environ.get("RESEND_FROM_EMAIL", "")
-        return (
-            EmailSettings(
-                smtp_host="smtp.gmail.com",
-                smtp_port=587,
-                username="",
-                password="",
-                sender=from_email,
-                recipient="",
-                use_tls=True,
-            ),
-            BriefingSettings(
-                send_time="08:00",
-                timezone_label="America/New_York",
-                symbols=[
-                    "^GSPC",
-                    "^IXIC",
-                    "^DJI",
-                    "^VIX",
-                    "ES=F",
-                    "NQ=F",
-                    "CL=F",
-                    "GC=F",
-                    "EURUSD=X",
-                    "BTC-USD",
-                ],
-                headline_count=8,
-                subject_prefix="Market Morning Briefing",
-            ),
-        )
+    return (
+        EmailSettings(
+            smtp_host="",
+            smtp_port=587,
+            username="",
+            password="",
+            sender=os.environ.get("RESEND_FROM_EMAIL", "").strip(),
+            recipient=saved_recipient(),
+            use_tls=True,
+        ),
+        fixed_briefing_settings(),
+    )
 
 
 def settings_from_form(form: dict[str, list[str]]) -> tuple[EmailSettings, BriefingSettings]:
     def field(name: str, fallback: str = "") -> str:
         return form.get(name, [fallback])[0].strip()
 
-    symbols = [symbol.strip().upper() for symbol in field("symbols").split(",") if symbol.strip()]
     sender = os.environ.get("RESEND_FROM_EMAIL", "").strip()
     email_settings = EmailSettings(
         smtp_host="",
@@ -88,14 +106,7 @@ def settings_from_form(form: dict[str, list[str]]) -> tuple[EmailSettings, Brief
         recipient=field("recipient"),
         use_tls=True,
     )
-    briefing_settings = BriefingSettings(
-        send_time=field("send_time", "08:00"),
-        timezone_label=field("timezone_label", "America/New_York"),
-        symbols=symbols,
-        headline_count=int(field("headline_count", "8")),
-        subject_prefix=field("subject_prefix", "Market Morning Briefing"),
-    )
-    return email_settings, briefing_settings
+    return email_settings, fixed_briefing_settings()
 
 
 def save_form(form: dict[str, list[str]]) -> tuple[EmailSettings, BriefingSettings]:
@@ -155,7 +166,11 @@ def page_html(
     preview_html = f'<section class="preview">{preview}</section>' if preview else ""
     running = SERVER_STATE["scheduler_running"]
     scheduler_text = "Running" if running else "Stopped"
-    symbols = ", ".join(briefing_settings.symbols)
+    email_status = "Ready" if resend_ready() else "Needs Render env vars"
+    schedule_summary = (
+        f"{briefing_settings.send_time} {briefing_settings.timezone_label}, "
+        f"{len(briefing_settings.symbols)} default symbols"
+    )
 
     return f"""<!doctype html>
 <html lang="en">
@@ -408,6 +423,8 @@ def page_html(
     <aside>
       <div class="status">
         <div class="metric"><span>Scheduler</span><strong>{scheduler_text}</strong></div>
+        <div class="metric"><span>Email Provider</span><strong>{email_status}</strong></div>
+        <div class="metric"><span>Daily Briefing</span><strong>{html.escape(schedule_summary)}</strong></div>
         <div class="metric"><span>Next Run</span><strong>{html.escape(SERVER_STATE["next_run"] or "Not scheduled")}</strong></div>
         <div class="metric"><span>Last Result</span><strong>{html.escape(SERVER_STATE["last_result"])}</strong></div>
         <div class="metric"><span>Last Error</span><strong>{html.escape(SERVER_STATE["last_error"] or "None")}</strong></div>
@@ -418,32 +435,12 @@ def page_html(
       <form method="post">
         <section>
           <h2>Email Delivery</h2>
-          <p class="provider">Email is sent with Resend. The private API key and sender address are stored on the server, so users only enter a recipient email.</p>
+          <p class="provider">Email is sent with Resend. The sender, send time, market symbols, and briefing format are fixed by the server.</p>
           <div class="grid">
             <label>Recipient email
               <input name="recipient" type="email" value="{html.escape(email_settings.recipient)}" required>
             </label>
           </div>
-        </section>
-        <section>
-          <h2>Briefing</h2>
-          <div class="grid">
-            <label>Send time
-              <input name="send_time" type="time" value="{html.escape(briefing_settings.send_time)}" required>
-            </label>
-            <label>Timezone label
-              <input name="timezone_label" value="{html.escape(briefing_settings.timezone_label)}" required>
-            </label>
-            <label>Subject prefix
-              <input name="subject_prefix" value="{html.escape(briefing_settings.subject_prefix)}" required>
-            </label>
-            <label>Headline count
-              <input name="headline_count" type="number" min="1" max="25" value="{briefing_settings.headline_count}" required>
-            </label>
-          </div>
-          <label style="margin-top:16px">Symbols
-            <textarea name="symbols" required>{html.escape(symbols)}</textarea>
-          </label>
         </section>
         <div class="actions">
           <button class="primary" formaction="/save" type="submit">Save Settings</button>
@@ -601,7 +598,7 @@ def instructions_html() -> str:
     <div class="topbar">
       <div>
         <h1>Email Setup</h1>
-        <p>Connect the briefing website to Resend so users only enter recipient and schedule details.</p>
+        <p>Connect the briefing website to Resend so users only enter a recipient email.</p>
       </div>
       <nav aria-label="Primary">
         <a href="/">Dashboard</a>
@@ -612,7 +609,7 @@ def instructions_html() -> str:
   <main>
     <section>
       <h2>What The Website Needs</h2>
-      <p>The website sends email through Resend. The API key and sender address stay private on Render, so users do not need Gmail app passwords or SMTP settings.</p>
+      <p>The website sends email through Resend. The API key, sender address, send time, symbols, and briefing format stay private on Render, so users do not need Gmail app passwords or SMTP settings.</p>
       <table>
         <thead>
           <tr><th>Setting</th><th>Where it goes</th></tr>
@@ -620,9 +617,9 @@ def instructions_html() -> str:
         <tbody>
           <tr><td><code>RESEND_API_KEY</code></td><td>Render environment variable. This is your private Resend API key.</td></tr>
           <tr><td><code>RESEND_FROM_EMAIL</code></td><td>Render environment variable. For testing, use <code>Market Briefing &lt;onboarding@resend.dev&gt;</code>.</td></tr>
-          <tr><td>Recipient email</td><td>Website form. This is where the briefing is sent.</td></tr>
-          <tr><td>Send time</td><td>Website form. This controls the daily schedule.</td></tr>
-          <tr><td>Symbols</td><td>Website form. These are the market tickers in the briefing.</td></tr>
+          <tr><td>Recipient email</td><td>Website form. This is the only user-editable field.</td></tr>
+          <tr><td><code>BRIEFING_SEND_TIME</code></td><td>Optional Render environment variable. Defaults to <code>08:00</code>.</td></tr>
+          <tr><td><code>BRIEFING_SYMBOLS</code></td><td>Optional Render environment variable. Defaults to major indices, futures, EUR/USD, and BTC.</td></tr>
         </tbody>
       </table>
     </section>
@@ -641,12 +638,12 @@ def instructions_html() -> str:
     </section>
     <section>
       <h2>How Sending Works</h2>
-      <p>When you press Send Test Email, or when the scheduler reaches the selected time, the app builds the briefing, creates an HTML email, calls the Resend email API with your private server-side API key, and sends the message to the recipient address.</p>
+      <p>When you press Send Test Email, or when the scheduler reaches the fixed server-side send time, the app builds the briefing, creates an HTML email, calls the Resend email API with your private server-side API key, and sends the message to the recipient address.</p>
       <p>The market data comes from Yahoo Finance quote and RSS endpoints. The email itself is sent from the Resend sender configured in <code>RESEND_FROM_EMAIL</code>.</p>
     </section>
     <section>
       <h2>Daily Delivery</h2>
-      <p>Press Start Scheduler on the dashboard to keep the website process waiting in the background. At the configured send time, it sends one briefing email. For reliable daily delivery, leave the website running or set Windows Task Scheduler to run <code>python market_briefing_web.py</code> when you sign in.</p>
+      <p>Press Start Scheduler on the dashboard to keep the website process waiting in the background. At the fixed send time, it sends one briefing email to the saved recipient. Use UptimeRobot to help keep the Render web service awake.</p>
     </section>
   </main>
 </body>
@@ -686,12 +683,16 @@ class BriefingHandler(BaseHTTPRequestHandler):
                 preview = f"<h2>{html.escape(subject)}</h2>{body_html}"
                 notice = "Preview generated from the latest settings."
             elif self.path == "/send":
+                if not resend_ready():
+                    raise ValueError("Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL in Render.")
                 subject, body_text, body_html = build_briefing(briefing_settings)
                 send_email(email_settings, subject, body_text, body_html)
                 SERVER_STATE["last_result"] = f"Sent {subject} to {email_settings.recipient}"
                 SERVER_STATE["last_error"] = ""
                 notice = "Test email sent."
             elif self.path == "/start":
+                if not resend_ready():
+                    raise ValueError("Resend is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL in Render.")
                 start_scheduler()
                 notice = "Scheduler started."
             elif self.path == "/stop":

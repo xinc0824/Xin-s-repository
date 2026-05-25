@@ -5,8 +5,8 @@ It uses delayed Yahoo Finance quote data and Yahoo Finance RSS headlines.
 
 ## Recommended Setup: Render Web Service + UptimeRobot
 
-Use the Python web service when you want users to type the recipient email,
-send time, and symbols in the form.
+Use the Python web service when you want users to type only the recipient email
+in the form.
 
 ```text
 Build Command: pip install -r requirements.txt
@@ -45,6 +45,17 @@ RESEND_FROM_EMAIL=Market Briefing <briefing@yourdomain.com>
 
 For testing without a custom domain, use `Market Briefing <onboarding@resend.dev>`
 and send only to the email verified in your Resend account.
+
+The public form only shows recipient email. These optional Render environment
+variables control the fixed briefing defaults:
+
+```text
+BRIEFING_SEND_TIME=08:00
+BRIEFING_SYMBOLS=^GSPC,^IXIC,^DJI,^VIX,ES=F,NQ=F,CL=F,GC=F,EURUSD=X,BTC-USD
+BRIEFING_HEADLINE_COUNT=8
+BRIEFING_TIMEZONE_LABEL=America/New_York
+BRIEFING_SUBJECT_PREFIX=Market Morning Briefing
+```
 
 ## Static Site Alternative
 
