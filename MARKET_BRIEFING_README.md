@@ -20,8 +20,8 @@ http://127.0.0.1:8080
 The website lets you edit settings, preview the briefing, send a test email,
 and start or stop the in-process daily scheduler.
 
-The dashboard keeps the usual fields visible and places SMTP host, SMTP port,
-sender override, and TLS inside Advanced email settings.
+The dashboard uses Resend for email delivery, so users only need a recipient
+email, send time, symbols, and headline count.
 
 ## Resend Email Sending
 
@@ -36,7 +36,7 @@ RESEND_FROM_EMAIL=Market Briefing <briefing@yourdomain.com>
 ```
 
 With those set, users only need to enter their recipient email, send time, and
-symbols. SMTP settings remain available as an advanced fallback.
+symbols.
 
 For email setup instructions, open:
 

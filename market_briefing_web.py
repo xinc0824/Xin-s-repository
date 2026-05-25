@@ -78,16 +78,15 @@ def settings_from_form(form: dict[str, list[str]]) -> tuple[EmailSettings, Brief
         return form.get(name, [fallback])[0].strip()
 
     symbols = [symbol.strip().upper() for symbol in field("symbols").split(",") if symbol.strip()]
-    username = field("username")
-    sender = field("sender") or username
+    sender = os.environ.get("RESEND_FROM_EMAIL", "").strip()
     email_settings = EmailSettings(
-        smtp_host=field("smtp_host"),
-        smtp_port=int(field("smtp_port", "587")),
-        username=username,
-        password=field("password"),
+        smtp_host="",
+        smtp_port=587,
+        username="",
+        password="",
         sender=sender,
         recipient=field("recipient"),
-        use_tls=field("use_tls", "off") == "on",
+        use_tls=True,
     )
     briefing_settings = BriefingSettings(
         send_time=field("send_time", "08:00"),
@@ -156,7 +155,6 @@ def page_html(
     preview_html = f'<section class="preview">{preview}</section>' if preview else ""
     running = SERVER_STATE["scheduler_running"]
     scheduler_text = "Running" if running else "Stopped"
-    checked = "checked" if email_settings.use_tls else ""
     symbols = ", ".join(briefing_settings.symbols)
 
     return f"""<!doctype html>
@@ -316,22 +314,27 @@ def page_html(
       color: #334155;
       line-height: 1.45;
     }}
-    details {{
-      border: 1px solid var(--line);
+    .toast {{
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 10;
+      min-width: 220px;
+      max-width: min(420px, calc(100vw - 44px));
+      border: 1px solid #99f6e4;
       border-radius: 8px;
-      background: #f8fafc;
-      padding: 0;
-      margin-top: 16px;
+      background: #134e4a;
+      color: #fff;
+      padding: 12px 14px;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, .2);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px);
+      transition: opacity .18s ease, transform .18s ease;
     }}
-    summary {{
-      cursor: pointer;
-      padding: 14px 16px;
-      color: var(--navy);
-      font-weight: 700;
-    }}
-    .advanced-body {{
-      border-top: 1px solid var(--line);
-      padding: 16px;
+    .toast.show {{
+      opacity: 1;
+      transform: translateY(0);
     }}
     .actions {{
       position: sticky;
@@ -415,37 +418,12 @@ def page_html(
       <form method="post">
         <section>
           <h2>Email Delivery</h2>
-          <p class="provider">Simple mode uses Resend when <strong>RESEND_API_KEY</strong> is set on the server. Users only need a recipient email.</p>
+          <p class="provider">Email is sent with Resend. The private API key and sender address are stored on the server, so users only enter a recipient email.</p>
           <div class="grid">
             <label>Recipient email
               <input name="recipient" type="email" value="{html.escape(email_settings.recipient)}" required>
             </label>
           </div>
-          <details>
-            <summary>Advanced email settings for SMTP fallback</summary>
-            <div class="advanced-body">
-              <div class="grid">
-                <label>SMTP username
-                  <input name="username" type="email" value="{html.escape(email_settings.username)}">
-                </label>
-                <label>SMTP password or app password
-                  <input name="password" type="password" value="{html.escape(email_settings.password)}">
-                </label>
-                <label>SMTP host
-                  <input name="smtp_host" value="{html.escape(email_settings.smtp_host)}" required>
-                </label>
-                <label>SMTP port
-                  <input name="smtp_port" type="number" min="1" max="65535" value="{email_settings.smtp_port}" required>
-                </label>
-                <label>Sender shown on email
-                  <input name="sender" type="email" value="{html.escape(email_settings.sender)}">
-                </label>
-                <label class="check">
-                  <input name="use_tls" type="checkbox" {checked}> Use TLS
-                </label>
-              </div>
-            </div>
-          </details>
         </section>
         <section>
           <h2>Briefing</h2>
@@ -478,6 +456,30 @@ def page_html(
       {preview_html}
     </div>
   </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+    const toast = document.getElementById('toast');
+    const form = document.querySelector('form');
+    const messages = {{
+      '/save': 'Saving settings...',
+      '/preview': 'Building preview...',
+      '/send': 'Sending test email...',
+      '/start': 'Starting scheduler...',
+      '/stop': 'Stopping scheduler...'
+    }};
+    function showToast(message) {{
+      toast.textContent = message;
+      toast.classList.add('show');
+    }}
+    if ({'true' if notice else 'false'}) {{
+      showToast({notice!r});
+      setTimeout(() => toast.classList.remove('show'), 4200);
+    }}
+    form.addEventListener('submit', (event) => {{
+      const action = event.submitter ? event.submitter.getAttribute('formaction') : '/save';
+      showToast(messages[action] || 'Working...');
+    }});
+  </script>
 </body>
 </html>"""
 
@@ -599,7 +601,7 @@ def instructions_html() -> str:
     <div class="topbar">
       <div>
         <h1>Email Setup</h1>
-        <p>Connect the briefing website to an email account that can send through SMTP.</p>
+        <p>Connect the briefing website to Resend so users only enter recipient and schedule details.</p>
       </div>
       <nav aria-label="Primary">
         <a href="/">Dashboard</a>
@@ -610,37 +612,37 @@ def instructions_html() -> str:
   <main>
     <section>
       <h2>What The Website Needs</h2>
-      <p>The website sends email by logging in to an SMTP server. SMTP is the standard mail-sending service used by Gmail, Outlook, Yahoo, and many company email systems.</p>
+      <p>The website sends email through Resend. The API key and sender address stay private on Render, so users do not need Gmail app passwords or SMTP settings.</p>
       <table>
         <thead>
-          <tr><th>Field</th><th>What to enter</th></tr>
+          <tr><th>Setting</th><th>Where it goes</th></tr>
         </thead>
         <tbody>
-          <tr><td>SMTP host</td><td>For Gmail, use <code>smtp.gmail.com</code>.</td></tr>
-          <tr><td>SMTP port</td><td>Use <code>587</code> for TLS.</td></tr>
-          <tr><td>Username</td><td>Your sending email address, such as <code>yourname@gmail.com</code>.</td></tr>
-          <tr><td>Password or app password</td><td>An app password from your email provider. Do not use your normal Gmail password.</td></tr>
-          <tr><td>Sender</td><td>The email address the message should come from. Usually the same as Username.</td></tr>
-          <tr><td>Recipient</td><td>The address that receives the morning briefing.</td></tr>
+          <tr><td><code>RESEND_API_KEY</code></td><td>Render environment variable. This is your private Resend API key.</td></tr>
+          <tr><td><code>RESEND_FROM_EMAIL</code></td><td>Render environment variable. For testing, use <code>Market Briefing &lt;onboarding@resend.dev&gt;</code>.</td></tr>
+          <tr><td>Recipient email</td><td>Website form. This is where the briefing is sent.</td></tr>
+          <tr><td>Send time</td><td>Website form. This controls the daily schedule.</td></tr>
+          <tr><td>Symbols</td><td>Website form. These are the market tickers in the briefing.</td></tr>
         </tbody>
       </table>
     </section>
     <section>
-      <h2>Gmail Setup</h2>
+      <h2>Render Setup</h2>
       <ol>
-        <li>Turn on 2-Step Verification for your Google account.</li>
-        <li>Create a Google app password for Mail.</li>
-        <li>Copy the 16-character app password.</li>
-        <li>Paste that app password into the website's Password or app password field.</li>
-        <li>Use <code>smtp.gmail.com</code>, port <code>587</code>, and keep Use TLS checked.</li>
-        <li>Save settings, then press Send Test Email.</li>
+        <li>Create a Resend API key.</li>
+        <li>Open your Render service.</li>
+        <li>Go to Environment.</li>
+        <li>Add <code>RESEND_API_KEY</code>.</li>
+        <li>Add <code>RESEND_FROM_EMAIL</code>.</li>
+        <li>Redeploy the latest commit.</li>
+        <li>Open the website and press Send Test Email.</li>
       </ol>
-      <p class="callout">Your saved settings go into <code>market_briefing.ini</code> on this computer. That file is ignored by git because it contains email credentials.</p>
+      <p class="callout">For Resend testing, send to the email address connected to your Resend account. Sending to the public usually requires verifying a real domain in Resend.</p>
     </section>
     <section>
       <h2>How Sending Works</h2>
-      <p>When you press Send Test Email, or when the scheduler reaches the selected time, the app builds the briefing, creates an HTML email, connects to your SMTP server with TLS, logs in with your username and app password, and sends the message to the recipient address.</p>
-      <p>The market data comes from Yahoo Finance quote and RSS endpoints. The email itself is sent from your own email account, so replies and sent-mail records belong to that account.</p>
+      <p>When you press Send Test Email, or when the scheduler reaches the selected time, the app builds the briefing, creates an HTML email, calls the Resend email API with your private server-side API key, and sends the message to the recipient address.</p>
+      <p>The market data comes from Yahoo Finance quote and RSS endpoints. The email itself is sent from the Resend sender configured in <code>RESEND_FROM_EMAIL</code>.</p>
     </section>
     <section>
       <h2>Daily Delivery</h2>
