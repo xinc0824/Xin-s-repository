@@ -19,6 +19,7 @@ import smtplib
 import ssl
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -196,8 +197,18 @@ def write_config(path: Path, email_settings: EmailSettings, briefing_settings: B
 
 def build_briefing(settings: BriefingSettings) -> tuple[str, str, str]:
     today = dt.datetime.now().strftime("%A, %B %d, %Y")
-    quotes = fetch_quotes(settings.symbols)
-    headlines = fetch_headlines(settings.headline_count)
+    data_warnings = []
+    try:
+        quotes = fetch_quotes(settings.symbols)
+    except Exception as exc:
+        quotes = []
+        data_warnings.append(f"Market quotes unavailable: {exc}")
+
+    try:
+        headlines = fetch_headlines(settings.headline_count)
+    except Exception as exc:
+        headlines = []
+        data_warnings.append(f"Headlines unavailable: {exc}")
 
     subject = f"{settings.subject_prefix} - {today}"
     text_lines = [
@@ -207,6 +218,11 @@ def build_briefing(settings: BriefingSettings) -> tuple[str, str, str]:
         "Market Snapshot",
     ]
     html_rows = []
+
+    if data_warnings:
+        text_lines.extend(["", "Data warnings"])
+        text_lines.extend(f"- {warning}" for warning in data_warnings)
+        text_lines.append("")
 
     for quote in quotes:
         symbol = quote.get("symbol", "")
@@ -231,6 +247,11 @@ def build_briefing(settings: BriefingSettings) -> tuple[str, str, str]:
             "</tr>"
         )
 
+    if not html_rows:
+        html_rows.append(
+            "<tr><td colspan=\"6\">Market quotes are temporarily unavailable.</td></tr>"
+        )
+
     text_lines.extend(["", "Top Headlines"])
     html_headlines = []
     for headline in headlines:
@@ -245,6 +266,9 @@ def build_briefing(settings: BriefingSettings) -> tuple[str, str, str]:
             "</li>"
         )
 
+    if not html_headlines:
+        html_headlines.append("<li>Headlines are temporarily unavailable.</li>")
+
     text_lines.extend(
         [
             "",
@@ -258,6 +282,7 @@ def build_briefing(settings: BriefingSettings) -> tuple[str, str, str]:
   <body style="font-family: Arial, sans-serif; color: #1f2937;">
     <h2>{html.escape(settings.subject_prefix)}</h2>
     <p>{html.escape(today)}</p>
+    {''.join(f'<p><strong>{html.escape(warning)}</strong></p>' for warning in data_warnings)}
     <h3>Market Snapshot</h3>
     <table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse;">
       <thead>
