@@ -652,6 +652,14 @@ def instructions_html() -> str:
 
 class BriefingHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
+        if self.path == "/health":
+            body = b"OK"
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path == "/instructions":
             body = instructions_html().encode("utf-8")
             self.send_response(HTTPStatus.OK)

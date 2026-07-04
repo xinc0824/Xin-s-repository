@@ -33,6 +33,12 @@ service stays awake more reliably.
 6. Monitoring Interval: `5 minutes`.
 7. Click `Create Monitor`.
 
+Use the health-check URL for UptimeRobot:
+
+```text
+https://your-render-service.onrender.com/health
+```
+
 ## Resend Email Sending
 
 The web service sends email through Resend instead of asking users to enter SMTP
