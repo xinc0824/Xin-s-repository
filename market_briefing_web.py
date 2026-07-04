@@ -651,6 +651,14 @@ def instructions_html() -> str:
 
 
 class BriefingHandler(BaseHTTPRequestHandler):
+    def do_HEAD(self) -> None:
+        if self.path in ("/", "/index.html", "/health", "/instructions"):
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
+
     def do_GET(self) -> None:
         if self.path == "/health":
             body = b"OK"
